@@ -1,6 +1,5 @@
 import os
 import logging
-import threading
 
 from common import middleware, message_protocol, fruit_item
 
@@ -33,7 +32,8 @@ class SumFilter:
         ) + fruit_item.FruitItem(fruit, int(amount))
         self.amount_by_fruit[client_id] = client_fruits
 
-    def _process_eof(self, client_id):
+
+    def _flush_client(self, client_id):
         client_fruits = self.amount_by_fruit.pop(client_id, {})
 
         logging.info(f"Sending totals for client {client_id}")
@@ -55,13 +55,32 @@ class SumFilter:
         for data_output_exchange in self.data_output_exchanges:
             data_output_exchange.send(eof_message)
 
+    def _process_eof(self, client_id, seen_by):
+        if ID in seen_by:
+            self.input_queue.send(
+                message_protocol.internal.serialize(
+                    [message_protocol.internal.EOF, client_id, seen_by]
+                )
+            )
+            return
+
+        self._flush_client(client_id)
+        seen_by.append(ID)
+
+        if len(seen_by) < SUM_AMOUNT:
+            self.input_queue.send(
+                message_protocol.internal.serialize(
+                    [message_protocol.internal.EOF, client_id, seen_by]
+                )
+            )
+
     def process_data_messsage(self, message, ack, nack):
         [msg_type, client_id, payload] = message_protocol.internal.deserialize(message)
         if msg_type == message_protocol.internal.DATA:
             [fruit, amount] = payload
             self._process_data(client_id, fruit, amount)
         elif msg_type == message_protocol.internal.EOF:
-            self._process_eof(client_id)
+            self._process_eof(client_id, payload)
         ack()
 
     def start(self):
