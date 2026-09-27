@@ -15,6 +15,16 @@ TOP_SIZE = int(os.environ["TOP_SIZE"])
 
 class JoinFilter:
 
+    def __init__(self):
+        self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(
+            MOM_HOST, INPUT_QUEUE
+        )
+        self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(
+            MOM_HOST, OUTPUT_QUEUE
+        )
+        self.fruit_list = {}
+        self.count = {}    
+
     def process_messsage(self, message, ack, nack):
         logging.info("Received top")
         [msg_type, client_id, payload] = message_protocol.internal.deserialize(message)
