@@ -26,33 +26,42 @@ class SumFilter:
             self.data_output_exchanges.append(data_output_exchange)
         self.amount_by_fruit = {}
 
-    def _process_data(self, fruit, amount):
-        logging.info(f"Process data")
-        self.amount_by_fruit[fruit] = self.amount_by_fruit.get(
+    def _process_data(self, client_id, fruit, amount):
+        client_fruits = self.amount_by_fruit.get(client_id, {})
+        client_fruits[fruit] = client_fruits.get(
             fruit, fruit_item.FruitItem(fruit, 0)
         ) + fruit_item.FruitItem(fruit, int(amount))
+        self.amount_by_fruit[client_id] = client_fruits
 
-    def _process_eof(self):
-        logging.info(f"Broadcasting data messages")
-        for final_fruit_item in self.amount_by_fruit.values():
+    def _process_eof(self, client_id):
+        client_fruits = self.amount_by_fruit.pop(client_id, {})
+
+        logging.info(f"Sending totals for client {client_id}")
+        for final_fruit_item in client_fruits.values():
+            message = message_protocol.internal.serialize(
+                [
+                    message_protocol.internal.DATA,
+                    client_id,
+                    [final_fruit_item.fruit, final_fruit_item.amount],
+                ]
+            )
             for data_output_exchange in self.data_output_exchanges:
-                data_output_exchange.send(
-                    message_protocol.internal.serialize(
-                        [final_fruit_item.fruit, final_fruit_item.amount]
-                    )
-                )
+                data_output_exchange.send(message)
 
-        logging.info(f"Broadcasting EOF message")
+        logging.info(f"Sending EOF for client {client_id}")
+        eof_message = message_protocol.internal.serialize(
+            [message_protocol.internal.EOF, client_id, []]
+        )
         for data_output_exchange in self.data_output_exchanges:
-            data_output_exchange.send(message_protocol.internal.serialize([]))
-
+            data_output_exchange.send(eof_message)
 
     def process_data_messsage(self, message, ack, nack):
-        fields = message_protocol.internal.deserialize(message)
-        if len(fields) == 2:
-            self._process_data(*fields)
-        else:
-            self._process_eof(*fields)
+        [msg_type, client_id, payload] = message_protocol.internal.deserialize(message)
+        if msg_type == message_protocol.internal.DATA:
+            [fruit, amount] = payload
+            self._process_data(client_id, fruit, amount)
+        elif msg_type == message_protocol.internal.EOF:
+            self._process_eof(client_id)
         ack()
 
     def start(self):
