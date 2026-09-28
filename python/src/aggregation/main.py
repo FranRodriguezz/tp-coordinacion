@@ -1,6 +1,5 @@
 import os
 import logging
-import bisect
 
 from common import middleware, message_protocol, fruit_item
 
@@ -24,31 +23,30 @@ class AggregationFilter:
             MOM_HOST, OUTPUT_QUEUE
         )
         self.fruit_top = {}
+        self.eof_count = {}
 
     def _process_data(self, client_id, fruit, amount):
-        logging.info("Processing data message")
-        client_list = self.fruit_top.get(client_id, [])
-        for i in range (len(client_list)):
-            if client_list[i].fruit == fruit:
-                client_list[i] = client_list[i] + fruit_item.FruitItem(
-                    fruit, amount
-                )
-                return
-        self.fruit_top[client_id] = client_list
-        bisect.insort(client_list, fruit_item.FruitItem(fruit, amount))
+        client_fruits = self.fruit_top.get(client_id, {})
+        client_fruits[fruit] = client_fruits.get(
+            fruit, fruit_item.FruitItem(fruit, 0)
+        ) + fruit_item.FruitItem(fruit, int(amount))
+        self.fruit_top[client_id] = client_fruits
 
     def _process_eof(self, client_id):
-        logging.info("Received EOF")
-        client_list = self.fruit_top.pop(client_id, [])
-        fruit_chunk = list(client_list[-TOP_SIZE:])
-        fruit_chunk.reverse()
-        fruit_top = list(
-            map(
-                lambda fruit_item: (fruit_item.fruit, fruit_item.amount),
-                fruit_chunk,
+        count = self.eof_count.get(client_id, 0) + 1
+        if count < SUM_AMOUNT:
+            self.eof_count[client_id] = count
+            return
+
+        self.eof_count.pop(client_id, None)
+        fruits = self.fruit_top.pop(client_id, {})
+        top = sorted(fruits.values(), reverse=True)[:TOP_SIZE]
+        fruit_top = [[item.fruit, item.amount] for item in top]
+        self.output_queue.send(
+            message_protocol.internal.serialize(
+                [message_protocol.internal.DATA, client_id, fruit_top]
             )
         )
-        self.output_queue.send(message_protocol.internal.serialize([message_protocol.internal.DATA, client_id, fruit_top]))
 
     def process_messsage(self, message, ack, nack):
         [msg_type, client_id, payload] = message_protocol.internal.deserialize(message)
