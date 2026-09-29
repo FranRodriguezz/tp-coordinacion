@@ -131,7 +131,7 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
         """
         if self._is_consuming:
             try:
-                self._channel.stop_consuming()
+                self._connection.add_callback_threadsafe(self._channel.stop_consuming)
                 self._is_consuming = False
             except Exception as e:
                 raise MessageMiddlewareDisconnectedError(
@@ -277,7 +277,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         """
         if self._is_consuming:
             try:
-                self._channel.stop_consuming()
+                self._connection.add_callback_threadsafe(self._channel.stop_consuming)
                 self._is_consuming = False
             except Exception as e:
                 raise MessageMiddlewareDisconnectedError(
