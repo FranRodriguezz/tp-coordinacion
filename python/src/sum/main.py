@@ -1,6 +1,7 @@
 import os
 import logging
 import zlib
+import signal
 
 from common import middleware, message_protocol, fruit_item
 
@@ -25,6 +26,11 @@ class SumFilter:
             )
             self.data_output_exchanges.append(data_output_exchange)
         self.amount_by_fruit = {}
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
+
+    def _handle_sigterm(self, signum, frame):
+        logging.info("Received SIGTERM signal")
+        self.input_queue.stop_consuming()
 
     def _process_data(self, client_id, fruit, amount):
         client_fruits = self.amount_by_fruit.get(client_id, {})
@@ -89,6 +95,9 @@ class SumFilter:
     
     def start(self):
         self.input_queue.start_consuming(self.process_data_messsage)
+        self.input_queue.close()
+        for data_output_exchange in self.data_output_exchanges:
+            data_output_exchange.close()
 
 def main():
     logging.basicConfig(level=logging.INFO)
