@@ -19,7 +19,7 @@ class Client:
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self.handle_sigterm)
 
     def handle_sigterm(self, signum, frame):
-        logging.info("Recieved SIGTERM signal")
+        logging.info("Received SIGTERM signal")
         self.closed = True
         self.disconnect()
 
