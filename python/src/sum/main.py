@@ -14,6 +14,7 @@ SUM_CONTROL_EXCHANGE = "SUM_CONTROL_EXCHANGE"
 AGGREGATION_AMOUNT = int(os.environ["AGGREGATION_AMOUNT"])
 AGGREGATION_PREFIX = os.environ["AGGREGATION_PREFIX"]
 
+
 class SumFilter:
     def __init__(self):
         self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(
@@ -38,7 +39,6 @@ class SumFilter:
             fruit, fruit_item.FruitItem(fruit, 0)
         ) + fruit_item.FruitItem(fruit, int(amount))
         self.amount_by_fruit[client_id] = client_fruits
-
 
     def _flush_client(self, client_id):
         client_fruits = self.amount_by_fruit.pop(client_id, {})
@@ -92,12 +92,13 @@ class SumFilter:
 
     def _aggregator_index_for(self, fruit):
         return zlib.crc32(fruit.encode("utf-8")) % AGGREGATION_AMOUNT
-    
+
     def start(self):
         self.input_queue.start_consuming(self.process_data_messsage)
         self.input_queue.close()
         for data_output_exchange in self.data_output_exchanges:
             data_output_exchange.close()
+
 
 def main():
     logging.basicConfig(level=logging.INFO)

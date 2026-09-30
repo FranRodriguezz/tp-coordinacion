@@ -25,7 +25,7 @@ class AggregationFilter:
         )
         self.fruit_top = {}
         self.eof_count = {}
-        
+
         signal.signal(signal.SIGTERM, self._handle_sigterm)
 
     def _handle_sigterm(self, signum, frame):

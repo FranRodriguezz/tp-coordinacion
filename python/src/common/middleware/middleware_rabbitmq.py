@@ -179,7 +179,9 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
             ) from e
 
         try:
-            result = self._channel.queue_declare(queue=self._routing_keys[0], durable=True)
+            result = self._channel.queue_declare(
+                queue=self._routing_keys[0], durable=True
+            )
             self._queue_name = result.method.queue
         except Exception as e:
             raise MessageMiddlewareDisconnectedError(

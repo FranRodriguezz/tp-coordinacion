@@ -4,6 +4,7 @@ DATA = 1
 EOF = 2
 RESULT = 3
 
+
 def serialize(message):
     return json.dumps(message).encode("utf-8")
 
