@@ -1,5 +1,6 @@
 import os
 import logging
+import signal
 
 from common import middleware, message_protocol, fruit_item
 
@@ -22,15 +23,45 @@ class JoinFilter:
         self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(
             MOM_HOST, OUTPUT_QUEUE
         )
+        self.fruit_list = {}
+        self.count = {}
+
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
+
+    def _handle_sigterm(self, signum, frame):
+        logging.info("Received SIGTERM signal")
+        self.input_queue.stop_consuming()
 
     def process_messsage(self, message, ack, nack):
         logging.info("Received top")
-        fruit_top = message_protocol.internal.deserialize(message)
-        self.output_queue.send(message_protocol.internal.serialize(fruit_top))
+        [msg_type, client_id, payload] = message_protocol.internal.deserialize(message)
+
+        client_list = self.fruit_list.get(client_id, [])
+        for [fruit, amount] in payload:
+            client_list.append(fruit_item.FruitItem(fruit, amount))
+        client_count = self.count.get(client_id, 0) + 1
+
+        if client_count == AGGREGATION_AMOUNT:
+            fruit_chunk = sorted(client_list)[-TOP_SIZE:]
+            fruit_chunk.reverse()
+            fruit_top = [[item.fruit, item.amount] for item in fruit_chunk]
+            self.output_queue.send(
+                message_protocol.internal.serialize(
+                    [message_protocol.internal.RESULT, client_id, fruit_top]
+                )
+            )
+            self.fruit_list.pop(client_id, None)
+            self.count.pop(client_id, None)
+        else:
+            self.fruit_list[client_id] = client_list
+            self.count[client_id] = client_count
+
         ack()
 
     def start(self):
         self.input_queue.start_consuming(self.process_messsage)
+        self.input_queue.close()
+        self.output_queue.close()
 
 
 def main():
